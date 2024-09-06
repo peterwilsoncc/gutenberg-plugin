@@ -1,0 +1,88 @@
+name: Commit to Gutenberg build repo
+
+on:
+    push:
+        branches:
+            - trunk
+            - release/*
+            - wp/*
+
+# Concurrency: Run the workflow on each commit and wait for the previous run to complete.
+concurrency:
+    group: gutenberg-build-${{ github.ref }}
+
+jobs:
+    build:
+        name: Build
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+              with:
+                  fetch-depth: 1
+                  show-progress: ${{ runner.debug == '1' && 'true' || 'false' }}
+
+            - name: Use desired version of Node.js
+              uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.0.3
+              with:
+                  node-version-file: '.nvmrc'
+                  check-latest: true
+                  cache: npm
+
+            - name: Build Gutenberg plugin ZIP file
+              run: ./bin/build-plugin-zip.sh
+              env:
+                  NO_CHECKS: 'true'
+
+            - name: Checkout build repo
+              uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+              with:
+                  repository: 'peterwilsoncc/gutenberg-build'
+                  ssh-key: ${{ secrets.SSH_DEPLOY_KEY }}
+                  path: gutenberg-build-repo
+
+            - name: Checkout or create branch
+              run: |
+                  cd gutenberg-build-repo
+                  echo "Checking out or creating branch ${{ github.ref_name }}"
+                  git remote get-url origin
+                  git checkout ${{ github.ref_name }} || git checkout -b --orphan ${{ github.ref_name }}
+                  cd ..
+
+            - name: Unzip file to build repo.
+              run: |
+                  mv gutenberg-build-repo/.git $RUNNER_TEMP/gutenberg-build-repo-git
+                  rm -rf gutenberg-build-repo
+                  unzip -o gutenberg.zip -d gutenberg-build-repo
+                  mv $RUNNER_TEMP/gutenberg-build-repo-git gutenberg-build-repo/.git
+                  git status
+
+            - name: Commit changes to build repo
+              run: |
+                  # Get the URL of the source commit.
+                     SOURCE_COMMIT_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
+
+
+
+                   cd gutenberg-build-repo
+                   git config user.name "${COMMIT_AUTHOR_NAME}"
+                   git config user.email "${COMMIT_AUTHOR_EMAIL}"
+                   git config user.date "${COMMIT_AUTHOR_DATE}"
+                   git status
+                   git rm -rfq .
+                   git add .
+                   git commit --allow-empty -am "${COMMIT_MESSAGE}" -m "Source: ${SOURCE_COMMIT_URL}"
+                   git push origin ${{ github.ref_name }}
+                   git status
+                   git --no-pager log -1
+                   cd ..
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+                  COMMIT_AUTHOR_NAME: ${{ github.event.head_commit.author.name }}
+                  COMMIT_AUTHOR_EMAIL: ${{ github.event.head_commit.author.email }}
+                  COMMIT_AUTHOR_DATE: ${{ github.event.head_commit.timestamp }}
+                  COMMITTER_NAME: ${{ github.actor }}
+                  COMMITTER_EMAIL: ${{ github.actor }}@users.noreply.github.com
+                  COMMITTER_DATE: ${{ github.event.head_commit.timestamp }}
+                  BRANCH: ${{ github.ref_name }}
