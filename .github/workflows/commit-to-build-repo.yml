@@ -47,6 +47,7 @@ jobs:
                   echo "Checking out or creating branch ${{ github.ref_name }}"
                   git remote get-url origin
                   git checkout ${{ github.ref_name }} || git checkout -b --orphan ${{ github.ref_name }}
+                  git rm -rfq .
                   cd ..
 
             - name: Unzip file to build repo.
@@ -69,7 +70,6 @@ jobs:
                    git config user.email "${COMMIT_AUTHOR_EMAIL}"
                    git config user.date "${COMMIT_AUTHOR_DATE}"
                    git status
-                   git rm -rfq .
                    git add .
                    git commit --allow-empty -am "${COMMIT_MESSAGE}" -m "Source: ${SOURCE_COMMIT_URL}"
                    git push origin ${{ github.ref_name }}
