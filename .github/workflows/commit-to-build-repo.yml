@@ -46,7 +46,7 @@ jobs:
                   cd gutenberg-build-repo
                   echo "Checking out or creating branch ${{ github.ref_name }}"
                   git remote get-url origin
-                  git checkout ${{ github.ref_name }} || git checkout -b --orphan ${{ github.ref_name }}
+                  git checkout ${{ github.ref_name }} || git checkout --orphan ${{ github.ref_name }}
                   git rm -rfq .
                   cd ..
 
